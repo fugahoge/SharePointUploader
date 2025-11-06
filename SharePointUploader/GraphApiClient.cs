@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
@@ -37,15 +38,52 @@ public class GraphApiClient : IDisposable
       throw new Exception($"証明書の読み込みに失敗しました: {ex.Message}", ex);
     }
 
-    // ClientCertificateCredentialを使用して認証
-    var credential = new ClientCertificateCredential(
+    // 証明書認証とユーザー認証を組み合わせた認証
+    var scopes = new[] { 
+      "https://graph.microsoft.com/Files.ReadWrite.All",
+      "https://graph.microsoft.com/Sites.ReadWrite.All",
+      "https://graph.microsoft.com/User.Read"
+    };
+
+    // 証明書認証（アプリケーション認証）
+    var certificateCredential = new ClientCertificateCredential(
       tenantId,
       clientId,
       certificate
     );
 
+    // ユーザー認証（Interactive Browser認証）
+    // 初回のみブラウザでログインし、次回以降はキャッシュされたトークンを使用
+    var interactiveCredential = new InteractiveBrowserCredential(
+      new InteractiveBrowserCredentialOptions
+      {
+        // 初回ログイン: ブラウザでログインし、アクセストークンとリフレッシュトークンを取得
+        // 2回目以降: キャッシュからリフレッシュトークンを読み込み、アクセストークンを自動更新
+        // リフレッシュトークンの有効期限90日経過後は再度ブラウザでログインが必要
+        
+        TenantId = tenantId,
+        ClientId = clientId,
+        RedirectUri = new Uri("http://localhost"),
+
+        // トークンキャッシュを有効化（Windows Credential Managerへ保存）
+        TokenCachePersistenceOptions = new TokenCachePersistenceOptions
+        {
+          Name = "SharePointUploaderTokenCache"
+        }
+      }
+    );
+
+    // 証明書でアプリケーション認証を行い、ユーザーがログインしてそのユーザーの権限でアクセス
+    var credential = new ChainedTokenCredential(
+      certificateCredential,
+      interactiveCredential
+    );
+
+    _logger.LogInformation("証明書認証とユーザー認証を組み合わせて認証を行います。");
+    _logger.LogInformation("初回のみブラウザでログインが必要です。次回以降はキャッシュされたトークンを使用します。");
+
     // GraphServiceClientの作成
-    _graphClient = new GraphServiceClient(credential);
+    _graphClient = new GraphServiceClient(credential, scopes);
   }
 
   public async Task<string> UploadFileAsync(string siteUrl, string libraryName, string folderPath, string localFilePath)
