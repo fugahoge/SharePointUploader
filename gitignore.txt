@@ -1,0 +1,52 @@
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache/options
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Configuration files with secrets
+config.json
+
+# Certificate files
+*.pfx
+*.cer
+*.pem
+*.key
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+
+# User-specific files
+*.rsuser
+*.userprefs
+
+# Build outputs
+*.dll
+*.exe
+*.pdb
+
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
