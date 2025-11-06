@@ -7,6 +7,7 @@ namespace SharePointUploader;
 public class Config
 {
   public SharePointConfig SharePoint { get; set; } = new();
+  public LogConfig Log { get; set; } = new();
 
   public static Config Load()
   {
@@ -41,4 +42,10 @@ public class SharePointConfig
   public string ClientId { get; set; } = string.Empty;
   public string CertificatePath { get; set; } = string.Empty;
   public string CertificatePassword { get; set; } = string.Empty;
+}
+
+public class LogConfig
+{
+  public string Level { get; set; } = "Information";
+  public int RetainedFileCountLimit { get; set; } = 10;
 }

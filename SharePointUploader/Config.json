@@ -7,6 +7,10 @@
     "ClientId": "your-client-id",
     "CertificatePath": "path/to/certificate.pfx",
     "CertificatePassword": "certificate-password"
+  },
+  "Log": {
+    "Level": "Information",
+    "RetainedFileCountLimit": 10
   }
 }
 

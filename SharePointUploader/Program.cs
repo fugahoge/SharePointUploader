@@ -9,10 +9,14 @@ class Program
 {
   static async Task Main(string[] args)
   {
-    var logger = CreateLogger();
+    var config = Config.Load();
+    var logger = CreateLogger(config.Log);
 
     try
     {
+      // 設定の検証
+      ValidateConfig(config.SharePoint, logger);
+
       // 引数の確認
       if (args.Length == 0)
       {
@@ -31,13 +35,6 @@ class Program
         Environment.Exit(1);
         return;
       }
-
-      // 設定ファイルの読み込み
-      logger.LogInformation("設定ファイル読み込み...");
-      var config = Config.Load();
-
-      // 設定の検証
-      ValidateConfig(config.SharePoint, logger);
 
       // Graph API クライアントの作成
       var client = new GraphApiClient(
@@ -80,20 +77,36 @@ class Program
     }
   }
 
-  private static ILogger<Program> CreateLogger()
+  private static ILogger<Program> CreateLogger(LogConfig? logConfig)
   {
     // ログディレクトリの設定
     var logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Logs");
     Directory.CreateDirectory(logDirectory);
 
+    // ログ設定の取得（デフォルト値を使用）
+    var logLevel = logConfig?.Level ?? "Information";
+    var retainedFileCountLimit = logConfig?.RetainedFileCountLimit ?? 10;
+
+    // ログレベルのパース
+    var minimumLevel = logLevel switch
+    {
+      "Verbose" => Serilog.Events.LogEventLevel.Verbose,
+      "Debug" => Serilog.Events.LogEventLevel.Debug,
+      "Information" => Serilog.Events.LogEventLevel.Information,
+      "Warning" => Serilog.Events.LogEventLevel.Warning,
+      "Error" => Serilog.Events.LogEventLevel.Error,
+      "Fatal" => Serilog.Events.LogEventLevel.Fatal,
+      _ => Serilog.Events.LogEventLevel.Information
+    };
+
     // Loggerの作成
     Log.Logger = new LoggerConfiguration()
-      .MinimumLevel.Information()
+      .MinimumLevel.Is(minimumLevel)
       .WriteTo.Console()
       .WriteTo.File(
         Path.Combine(logDirectory, "SharePointUploader_.log"),
         rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 10,
+        retainedFileCountLimit: retainedFileCountLimit,
         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
       .CreateLogger();
 
