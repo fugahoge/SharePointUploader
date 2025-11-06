@@ -9,28 +9,7 @@ class Program
 {
   static async Task Main(string[] args)
   {
-    // ログディレクトリの設定
-    var logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Logs");
-    Directory.CreateDirectory(logDirectory);
-
-    // Serilogの設定
-    Log.Logger = new LoggerConfiguration()
-      .MinimumLevel.Information()
-      .WriteTo.Console()
-      .WriteTo.File(
-        Path.Combine(logDirectory, "SharePointUploader_.log"),
-        rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 10,
-        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-      .CreateLogger();
-
-    // ILoggerFactoryの作成
-    using var loggerFactory = LoggerFactory.Create(builder =>
-    {
-      builder.AddSerilog();
-    });
-
-    var logger = loggerFactory.CreateLogger<Program>();
+    var logger = CreateLogger();
 
     try
     {
@@ -65,7 +44,8 @@ class Program
         config.SharePoint.TenantId,
         config.SharePoint.ClientId,
         config.SharePoint.CertificatePath,
-        config.SharePoint.CertificatePassword
+        config.SharePoint.CertificatePassword,
+        logger
       );
 
       logger.LogInformation($"アップロード開始: {fileName}");
@@ -77,8 +57,7 @@ class Program
           config.SharePoint.SiteUrl,
           config.SharePoint.LibraryName,
           config.SharePoint.FolderPath,
-          fileName,
-          logger
+          fileName
         );
 
         logger.LogInformation("アップロードが正常に完了しました");
@@ -101,7 +80,33 @@ class Program
     }
   }
 
-  private static void ValidateConfig(SharePointConfig config, ILogger logger)
+  private static ILogger<Program> CreateLogger()
+  {
+    // ログディレクトリの設定
+    var logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Logs");
+    Directory.CreateDirectory(logDirectory);
+
+    // Loggerの作成
+    Log.Logger = new LoggerConfiguration()
+      .MinimumLevel.Information()
+      .WriteTo.Console()
+      .WriteTo.File(
+        Path.Combine(logDirectory, "SharePointUploader_.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 10,
+        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+      .CreateLogger();
+
+    // ILoggerFactoryの作成
+    using var loggerFactory = LoggerFactory.Create(builder =>
+    {
+      builder.AddSerilog();
+    });
+
+    return loggerFactory.CreateLogger<Program>();
+  }
+
+  private static void ValidateConfig(SharePointConfig config, Microsoft.Extensions.Logging.ILogger logger)
   {
     if (string.IsNullOrWhiteSpace(config.SiteUrl))
     {
