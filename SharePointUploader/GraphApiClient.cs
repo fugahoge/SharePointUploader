@@ -66,15 +66,53 @@ public class GraphApiClient : IDisposable
 
     // フォルダが存在することを確認（存在しない場合は作成）
     var folderId = await EnsureFolderAsync(driveId, targetFolderPath);
+    var fileSize = new FileInfo(localFilePath).Length;
+
+    DriveItem? driveItem;
 
     // ファイルをアップロード
-    using var fileStream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read);
-    
-    var driveItem = await _graphClient.Drives[driveId]
-      .Items[folderId]
-      .ItemWithPath(fileName)
-      .Content
-      .PutAsync(fileStream);
+    if (fileSize < 4 * 1024 * 1024)
+    {
+      using var fileStream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read);
+      driveItem = await _graphClient.Drives[driveId]
+        .Items[folderId]
+        .ItemWithPath(fileName)
+        .Content
+        .PutAsync(fileStream);
+    }
+    else
+    {
+      var uploadSession = await _graphClient.Drives[driveId]
+        .Items[folderId]
+        .ItemWithPath(fileName)
+        .CreateUploadSession
+        .PostAsync(new Microsoft.Graph.Drives.Item.Items.Item.CreateUploadSession.CreateUploadSessionPostRequestBody
+        {
+          Item = new DriveItemUploadableProperties
+          {
+            AdditionalData = new Dictionary<string, object>
+            {
+              { "@microsoft.graph.conflictBehavior", "replace" }
+            }
+          }
+        });
+
+      if (uploadSession?.UploadUrl == null)
+      {
+        throw new Exception("アップロードセッションの作成に失敗しました");
+      }
+
+      using var fileStream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read);
+      var uploadTask = new LargeFileUploadTask<DriveItem>(uploadSession, fileStream, 320 * 1024);
+      var uploadResult = await uploadTask.UploadAsync();
+
+      if (!uploadResult.UploadSucceeded)
+      {
+        throw new Exception("大容量ファイルのアップロードに失敗しました");
+      }
+
+      driveItem = uploadResult.ItemResponse;
+    }
 
     if (driveItem?.WebUrl == null)
     {
