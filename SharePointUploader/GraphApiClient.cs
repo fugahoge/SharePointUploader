@@ -6,6 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace SharePointUploader;
 
@@ -28,7 +29,7 @@ public class GraphApiClient
     _httpClient = new HttpClient();
   }
 
-  public async Task<string> GetAccessTokenAsync(Logger logger)
+  public async Task<string> GetAccessTokenAsync(ILogger logger)
   {
     // トークンが有効な場合は再利用
     if (!string.IsNullOrEmpty(_accessToken) && DateTime.UtcNow < _tokenExpiry)
@@ -36,7 +37,7 @@ public class GraphApiClient
       return _accessToken;
     }
 
-    logger.LogInfo("アクセストークンを取得中...");
+    logger.LogInformation("アクセストークンを取得中...");
 
     // 証明書を読み込む
     X509Certificate2? certificate;
@@ -85,7 +86,7 @@ public class GraphApiClient
     var expiresIn = tokenResponse.GetProperty("expires_in").GetInt32();
     _tokenExpiry = DateTime.UtcNow.AddSeconds(expiresIn - 300); // 5分前に期限切れとして扱う
 
-    logger.LogInfo("アクセストークンを取得しました");
+    logger.LogInformation("アクセストークンを取得しました");
     return _accessToken ?? throw new Exception("アクセストークンが取得できませんでした");
   }
 
@@ -140,7 +141,7 @@ public class GraphApiClient
       .Replace('/', '_');
   }
 
-  public async Task<string> UploadFileAsync(string siteUrl, string libraryName, string folderPath, string localFilePath, Logger logger)
+  public async Task<string> UploadFileAsync(string siteUrl, string libraryName, string folderPath, string localFilePath, ILogger logger)
   {
     var accessToken = await GetAccessTokenAsync(logger);
 
@@ -160,7 +161,7 @@ public class GraphApiClient
     // パスをURLエンコード
     var encodedPath = Uri.EscapeDataString(uploadPath).Replace("%2F", "/");
 
-    logger.LogInfo($"ファイルをアップロード中: {uploadPath}");
+    logger.LogInformation($"ファイルをアップロード中: {uploadPath}");
 
     // ファイルをアップロード
     var uploadUrl = $"https://graph.microsoft.com/v1.0/sites/{siteId}/drives/{driveId}/root:/{encodedPath}:/content";
@@ -183,13 +184,13 @@ public class GraphApiClient
     var uploadResult = JsonSerializer.Deserialize<JsonElement>(responseContent);
     var webUrl = uploadResult.GetProperty("webUrl").GetString();
 
-    logger.LogInfo($"ファイルのアップロードが完了しました: {webUrl}");
+    logger.LogInformation($"ファイルのアップロードが完了しました: {webUrl}");
     return webUrl ?? string.Empty;
   }
 
-  private async Task<string> GetSiteIdAsync(string siteUrl, string accessToken, Logger logger)
+  private async Task<string> GetSiteIdAsync(string siteUrl, string accessToken, ILogger logger)
   {
-    logger.LogInfo("SharePointサイトIDを取得中...");
+    logger.LogInformation("SharePointサイトIDを取得中...");
 
     // URLからホスト名とパスを抽出
     var uri = new Uri(siteUrl);
@@ -212,13 +213,13 @@ public class GraphApiClient
     var site = JsonSerializer.Deserialize<JsonElement>(content);
     var siteId = site.GetProperty("id").GetString();
 
-    logger.LogInfo($"サイトIDを取得しました: {siteId}");
+    logger.LogInformation($"サイトIDを取得しました: {siteId}");
     return siteId ?? throw new Exception("サイトIDが取得できませんでした");
   }
 
-  private async Task<string> GetDriveIdAsync(string siteId, string libraryName, string accessToken, Logger logger)
+  private async Task<string> GetDriveIdAsync(string siteId, string libraryName, string accessToken, ILogger logger)
   {
-    logger.LogInfo($"ドライブ（ライブラリ）IDを取得中: {libraryName}");
+    logger.LogInformation($"ドライブ（ライブラリ）IDを取得中: {libraryName}");
 
     var apiUrl = $"https://graph.microsoft.com/v1.0/sites/{siteId}/drives";
 
@@ -242,7 +243,7 @@ public class GraphApiClient
       if (name == libraryName)
       {
         var driveId = drive.GetProperty("id").GetString();
-        logger.LogInfo($"ドライブIDを取得しました: {driveId}");
+        logger.LogInformation($"ドライブIDを取得しました: {driveId}");
         return driveId ?? throw new Exception("ドライブIDが取得できませんでした");
       }
     }

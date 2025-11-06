@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace SharePointUploader;
 
@@ -7,7 +9,28 @@ class Program
 {
   static async Task Main(string[] args)
   {
-    var logger = new Logger();
+    // ログディレクトリの設定
+    var logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "Logs");
+    Directory.CreateDirectory(logDirectory);
+
+    // Serilogの設定
+    Log.Logger = new LoggerConfiguration()
+      .MinimumLevel.Information()
+      .WriteTo.Console()
+      .WriteTo.File(
+        Path.Combine(logDirectory, "SharePointUploader_.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 10,
+        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+      .CreateLogger();
+
+    // ILoggerFactoryの作成
+    using var loggerFactory = LoggerFactory.Create(builder =>
+    {
+      builder.AddSerilog();
+    });
+
+    var logger = loggerFactory.CreateLogger<Program>();
 
     try
     {
@@ -15,7 +38,7 @@ class Program
       if (args.Length == 0)
       {
         logger.LogError("ファイル名が指定されていません");
-        logger.LogInfo("使用方法: SharePointUploader.exe <ファイル名>");
+        logger.LogInformation("使用方法: SharePointUploader.exe <ファイル名>");
         Environment.Exit(1);
         return;
       }
@@ -31,7 +54,7 @@ class Program
       }
 
       // 設定ファイルの読み込み
-      logger.LogInfo("設定ファイル読み込み...");
+      logger.LogInformation("設定ファイル読み込み...");
       var config = Config.Load();
 
       // 設定の検証
@@ -45,7 +68,7 @@ class Program
         config.SharePoint.CertificatePassword
       );
 
-      logger.LogInfo($"アップロード開始: {fileName}");
+      logger.LogInformation($"アップロード開始: {fileName}");
 
       try
       {
@@ -58,8 +81,8 @@ class Program
           logger
         );
 
-        logger.LogInfo("アップロードが正常に完了しました");
-        logger.LogInfo($"ファイルURL: {webUrl}");
+        logger.LogInformation("アップロードが正常に完了しました");
+        logger.LogInformation($"ファイルURL: {webUrl}");
       }
       finally
       {
@@ -68,17 +91,17 @@ class Program
     }
     catch (Exception ex)
     {
-      logger.LogError($"エラーが発生しました: {ex.Message}");
-      if (ex.InnerException != null)
-      {
-        logger.LogError($"内部エラー: {ex.InnerException.Message}");
-      }
-      logger.LogError($"スタックトレース: {ex.StackTrace}");
+      logger.LogError(ex, "エラーが発生しました");
       Environment.Exit(1);
+    }
+    finally
+    {
+      // Serilogのクリーンアップ
+      Log.CloseAndFlush();
     }
   }
 
-  private static void ValidateConfig(SharePointConfig config, Logger logger)
+  private static void ValidateConfig(SharePointConfig config, ILogger logger)
   {
     if (string.IsNullOrWhiteSpace(config.SiteUrl))
     {
@@ -110,6 +133,6 @@ class Program
       throw new Exception($"設定エラー: 証明書ファイルが見つかりません: {config.CertificatePath}");
     }
 
-    logger.LogInfo("設定の検証が完了しました");
+    logger.LogInformation("設定の検証が完了しました");
   }
 }
