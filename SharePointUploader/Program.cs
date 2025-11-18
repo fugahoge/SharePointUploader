@@ -38,10 +38,7 @@ class Program
 
       // Graph API クライアントの作成
       var client = new GraphApiClient(
-        config.SharePoint.TenantId,
-        config.SharePoint.ClientId,
-        config.SharePoint.CertificatePath,
-        config.SharePoint.CertificatePassword,
+        config.SharePoint,
         logger
       );
 
@@ -100,12 +97,15 @@ class Program
     };
 
     // Loggerの作成
+    var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+    var logFileName = $"SharePointUploader_{timestamp}.log";
+    
     Log.Logger = new LoggerConfiguration()
       .MinimumLevel.Is(minimumLevel)
       .WriteTo.Console()
       .WriteTo.File(
-        Path.Combine(logDirectory, "SharePointUploader_.log"),
-        rollingInterval: RollingInterval.Day,
+        Path.Combine(logDirectory, logFileName),
+        rollingInterval: RollingInterval.Infinite,
         retainedFileCountLimit: retainedFileCountLimit,
         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
       .CreateLogger();
@@ -141,14 +141,35 @@ class Program
       throw new Exception("設定エラー: ClientIdが指定されていません");
     }
 
-    if (string.IsNullOrWhiteSpace(config.CertificatePath))
+    // 証明書の設定を検証
+    if (!string.IsNullOrWhiteSpace(config.CertificatePath))
     {
-      throw new Exception("設定エラー: CertificatePathが指定されていません");
+      // ファイルから読み込む場合
+      if (!File.Exists(config.CertificatePath))
+      {
+        throw new Exception($"設定エラー: 証明書ファイルが見つかりません: {config.CertificatePath}");
+      }
+      logger.LogInformation("証明書はファイルから読み込まれます");
     }
-
-    if (!File.Exists(config.CertificatePath))
+    else
     {
-      throw new Exception($"設定エラー: 証明書ファイルが見つかりません: {config.CertificatePath}");
+      // Windowsキーストアから読み込む場合
+      if (string.IsNullOrWhiteSpace(config.Thumbprint))
+      {
+        throw new Exception("設定エラー: Thumbprintが指定されていません");
+      }
+
+      if (string.IsNullOrWhiteSpace(config.StoreName))
+      {
+        throw new Exception("設定エラー: StoreNameが指定されていません");
+      }
+
+      if (string.IsNullOrWhiteSpace(config.StoreLocation))
+      {
+        throw new Exception("設定エラー: StoreLocationが指定されていません");
+      }
+
+      logger.LogInformation("証明書はWindowsキーストアから読み込まれます");
     }
 
     logger.LogInformation("設定の検証が完了しました");

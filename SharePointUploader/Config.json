@@ -6,7 +6,10 @@
     "TenantId": "your-tenant-id",
     "ClientId": "your-client-id",
     "CertificatePath": "path/to/certificate.pfx",
-    "CertificatePassword": "certificate-password"
+    "CertificatePassword": "certificate-password",
+    "Thumbprint": "",
+    "StoreName": "My",
+    "StoreLocation": "CurrentUser"
   },
   "Log": {
     "Level": "Information",

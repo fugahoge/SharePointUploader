@@ -42,6 +42,9 @@ public class SharePointConfig
   public string ClientId { get; set; } = string.Empty;
   public string CertificatePath { get; set; } = string.Empty;
   public string CertificatePassword { get; set; } = string.Empty;
+  public string Thumbprint { get; set; } = string.Empty;
+  public string StoreName { get; set; } = string.Empty;
+  public string StoreLocation { get; set; } = string.Empty;
 }
 
 public class LogConfig

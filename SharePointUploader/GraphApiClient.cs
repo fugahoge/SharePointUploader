@@ -16,21 +16,47 @@ public class GraphApiClient : IDisposable
   private readonly GraphServiceClient _graphClient;
   private readonly ILogger _logger;
 
-  public GraphApiClient(string tenantId, string clientId, string certificatePath, string certificatePassword, ILogger logger)
+  public GraphApiClient(SharePointConfig config, ILogger logger)
   {
     _logger = logger;
+    
+    // スコープを設定
+    var scopes = new[] { 
+      "https://graph.microsoft.com/Files.ReadWrite.All",
+      "https://graph.microsoft.com/Sites.ReadWrite.All",
+      "https://graph.microsoft.com/User.Read"
+    };
 
     // 証明書を読み込む
     X509Certificate2 certificate;
     try
     {
-      if (string.IsNullOrEmpty(certificatePassword))
+      if (!string.IsNullOrWhiteSpace(config.CertificatePath))
       {
-        certificate = new X509Certificate2(certificatePath);
+        // 証明書を読み込む（ファイル）
+        _logger.LogInformation($"証明書を読み込みます: {config.CertificatePath}");
+        if (string.IsNullOrEmpty(config.CertificatePassword))
+        {
+          certificate = new X509Certificate2(config.CertificatePath);
+        }
+        else
+        {
+          certificate = new X509Certificate2(config.CertificatePath, config.CertificatePassword);
+        }
       }
       else
       {
-        certificate = new X509Certificate2(certificatePath, certificatePassword);
+        // 証明書を読み込む（Windowsキーストア）
+        _logger.LogInformation("証明書を読み込みます");
+        certificate = LoadCertificateFromStore(config.Thumbprint, config.StoreName, config.StoreLocation);
+      }
+
+      // 秘密鍵が含まれていることを確認
+      if (!certificate.HasPrivateKey)
+      {
+        certificate.Dispose();
+        throw new InvalidOperationException(
+          $"証明書に秘密鍵が含まれていません。");
       }
     }
     catch (Exception ex)
@@ -38,17 +64,10 @@ public class GraphApiClient : IDisposable
       throw new Exception($"証明書の読み込みに失敗しました: {ex.Message}", ex);
     }
 
-    // 証明書認証とユーザー認証を組み合わせた認証
-    var scopes = new[] { 
-      "https://graph.microsoft.com/Files.ReadWrite.All",
-      "https://graph.microsoft.com/Sites.ReadWrite.All",
-      "https://graph.microsoft.com/User.Read"
-    };
-
     // 証明書認証（アプリケーション認証）
     var certificateCredential = new ClientCertificateCredential(
-      tenantId,
-      clientId,
+      config.TenantId,
+      config.ClientId,
       certificate
     );
 
@@ -61,8 +80,8 @@ public class GraphApiClient : IDisposable
         // 2回目以降: キャッシュからリフレッシュトークンを読み込み、アクセストークンを自動更新
         // リフレッシュトークンの有効期限経過後は再度ブラウザでログインが必要（通常は90日経過後）
         
-        TenantId = tenantId,
-        ClientId = clientId,
+        TenantId = config.TenantId,
+        ClientId = config.ClientId,
         RedirectUri = new Uri("http://localhost"),
 
         // トークンキャッシュを有効化（Windows Credential Managerへ保存）
@@ -84,6 +103,49 @@ public class GraphApiClient : IDisposable
 
     // GraphServiceClientの作成
     _graphClient = new GraphServiceClient(credential, scopes);
+  }
+
+  /// <summary>
+  /// Windowsキーストアから証明書を読み込む
+  /// </summary>
+  private X509Certificate2 LoadCertificateFromStore(string thumbprint, string storeName, string storeLocation)
+  {
+    // StoreNameをパース
+    if (!Enum.TryParse<StoreName>(storeName, true, out var parsedStoreName))
+    {
+      throw new ArgumentException($"無効なStoreNameです: {storeName}");
+    }
+
+    // StoreLocationをパース
+    if (!Enum.TryParse<StoreLocation>(storeLocation, true, out var parsedStoreLocation))
+    {
+      throw new ArgumentException($"無効なStoreLocationです: {storeLocation}");
+    }
+
+    _logger.LogInformation($"キーストア: {parsedStoreName}, 場所: {parsedStoreLocation}, サムプリント: {thumbprint}");
+
+    // キーストアを開く
+    using var store = new X509Store(parsedStoreName, parsedStoreLocation);
+    store.Open(OpenFlags.ReadOnly);
+
+    // サムプリントで証明書を検索（大文字小文字を区別しない）
+    var certificates = store.Certificates.Find(
+      X509FindType.FindByThumbprint,
+      thumbprint,
+      false // validOnly: false にすることで、有効期限切れの証明書も検索可能
+    );
+
+    if (certificates.Count == 0)
+    {
+      throw new Exception(
+        $"指定されたサムプリント '{thumbprint}' の証明書がキーストア '{parsedStoreName}' ({parsedStoreLocation}) に見つかりませんでした");
+    }
+
+    // 最初の証明書を取得（通常は1つのはず）
+    var certificate = certificates[0];
+    
+    // 取得した証明書を返す
+    return new X509Certificate2(certificate);
   }
 
   public async Task<string> UploadFileAsync(string siteUrl, string libraryName, string folderPath, string localFilePath)
