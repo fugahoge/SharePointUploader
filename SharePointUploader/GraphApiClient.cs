@@ -15,11 +15,11 @@ namespace SharePointUploader;
 public class GraphApiClient : IDisposable
 {
   private readonly GraphServiceClient _graphClient;
-  private readonly ILogger _logger;
+  private readonly ILogger this._logger;
 
   public GraphApiClient(SharePointConfig config, ILogger logger)
   {
-    _logger = logger;
+    this._logger = logger;
     
     // スコープを設定
     var scopes = new[] { 
@@ -35,7 +35,7 @@ public class GraphApiClient : IDisposable
       if (!string.IsNullOrWhiteSpace(config.CertificatePath))
       {
         // 証明書を読み込む（ファイル）
-        _logger.LogInformation($"証明書を読み込みます: {config.CertificatePath}");
+        this._logger.LogInformation($"証明書を読み込みます: {config.CertificatePath}");
         if (string.IsNullOrEmpty(config.CertificatePassword))
         {
           certificate = new X509Certificate2(config.CertificatePath);
@@ -48,7 +48,7 @@ public class GraphApiClient : IDisposable
       else
       {
         // 証明書を読み込む（Windowsキーストア）
-        _logger.LogInformation("証明書を読み込みます");
+        this._logger.LogInformation("証明書を読み込みます");
         certificate = LoadCertificateFromStore(config.Thumbprint, config.StoreName, config.StoreLocation);
       }
 
@@ -99,8 +99,8 @@ public class GraphApiClient : IDisposable
       interactiveCredential
     );
 
-    _logger.LogInformation("証明書認証とユーザー認証を組み合わせて認証を行います。");
-    _logger.LogInformation("初回のみブラウザでログインが必要です。次回以降はキャッシュされたトークンを使用します。");
+    this._logger.LogInformation("証明書認証とユーザー認証を組み合わせて認証を行います。");
+    this._logger.LogInformation("初回のみブラウザでログインが必要です。次回以降はキャッシュされたトークンを使用します。");
 
     // GraphServiceClientの作成
     _graphClient = new GraphServiceClient(credential, scopes);
@@ -141,11 +141,11 @@ public class GraphApiClient : IDisposable
     if (ex is ODataError oDataError)
     {
       var errorMessage = GetODataErrorMessage(oDataError);
-      _logger.LogError(ex, $"{operation}中にODataErrorが発生しました: {errorMessage}");
+      this._logger.LogError(ex, $"{operation}中にODataErrorが発生しました: {errorMessage}");
       return new Exception($"{operation}に失敗しました: {errorMessage}", ex);
     }
 
-    _logger.LogError(ex, $"{operation}中に例外が発生しました");
+    this._logger.LogError(ex, $"{operation}中に例外が発生しました");
     return new Exception($"{operation}に失敗しました: {ex.Message}", ex);
   }
 
@@ -166,7 +166,7 @@ public class GraphApiClient : IDisposable
       throw new ArgumentException($"無効なStoreLocationです: {storeLocation}");
     }
 
-    _logger.LogInformation($"キーストア: {parsedStoreName}, 場所: {parsedStoreLocation}, サムプリント: {thumbprint}");
+    this._logger.LogInformation($"キーストア: {parsedStoreName}, 場所: {parsedStoreLocation}, サムプリント: {thumbprint}");
 
     // キーストアを開く
     using var store = new X509Store(parsedStoreName, parsedStoreLocation);
@@ -203,7 +203,7 @@ public class GraphApiClient : IDisposable
     // ファイル名を取得
     var fileName = Path.GetFileName(localFilePath);
 
-    _logger.LogInformation($"ファイルをアップロード中: {fileName}");
+    this._logger.LogInformation($"ファイルをアップロード中: {fileName}");
 
     // フォルダパスを正規化
     var targetFolderPath = string.IsNullOrEmpty(folderPath) ? string.Empty : folderPath.Trim('/');
@@ -263,13 +263,13 @@ public class GraphApiClient : IDisposable
       throw new Exception("ファイルのアップロードに失敗しました: WebUrlが取得できませんでした");
     }
 
-    _logger.LogInformation($"ファイルのアップロードが完了しました: {driveItem.WebUrl}");
+    this._logger.LogInformation($"ファイルのアップロードが完了しました: {driveItem.WebUrl}");
     return driveItem.WebUrl;
   }
 
   private async Task<string> GetSiteIdAsync(string siteUrl)
   {
-    _logger.LogInformation("SharePointサイトIDを取得中...");
+    this._logger.LogInformation("SharePointサイトIDを取得中...");
 
     // URLからホスト名とパスを抽出
     var uri = new Uri(siteUrl);
@@ -294,13 +294,13 @@ public class GraphApiClient : IDisposable
       throw new Exception("サイトIDが取得できませんでした");
     }
 
-    _logger.LogInformation($"サイトIDを取得しました: {site.Id}");
+    this._logger.LogInformation($"サイトIDを取得しました: {site.Id}");
     return site.Id;
   }
 
   private async Task<string> GetDriveIdAsync(string siteId, string libraryName)
   {
-    _logger.LogInformation($"ドライブ（ライブラリ）IDを取得中: {libraryName}");
+    this._logger.LogInformation($"ドライブ（ライブラリ）IDを取得中: {libraryName}");
 
     // ドライブ一覧を取得
     DriveCollectionResponse? drives;
@@ -329,7 +329,7 @@ public class GraphApiClient : IDisposable
       throw new Exception($"指定されたライブラリ '{libraryName}' が見つかりませんでした");
     }
 
-    _logger.LogInformation($"ドライブIDを取得しました: {drive.Id}");
+    this._logger.LogInformation($"ドライブIDを取得しました: {drive.Id}");
     return drive.Id;
   }
 
@@ -388,7 +388,7 @@ public class GraphApiClient : IDisposable
 
         if (createdFolder?.Id != null)
         {
-          _logger.LogInformation($"フォルダを作成しました: {folderName}");
+          this._logger.LogInformation($"フォルダを作成しました: {folderName}");
           currentParentId = createdFolder.Id;
         }
         else
