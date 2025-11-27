@@ -8,6 +8,7 @@ using Azure.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
+using Microsoft.Graph.Models.ODataErrors;
 
 namespace SharePointUploader;
 
@@ -103,6 +104,49 @@ public class GraphApiClient : IDisposable
 
     // GraphServiceClientの作成
     _graphClient = new GraphServiceClient(credential, scopes);
+  }
+
+  /// <summary>
+  /// ODataError例外から詳細なエラーメッセージを取得する
+  /// </summary>
+  private string GetODataErrorMessage(ODataError oDataError)
+  {
+    if (oDataError?.Error == null)
+    {
+      return "ODataError: エラー情報が取得できませんでした";
+    }
+
+    var error = oDataError.Error;
+    var message = $"ODataError: Code={error.Code}, Message={error.Message}";
+
+    if (error.Details != null && error.Details.Count > 0)
+    {
+      var details = string.Join("; ", error.Details.Select(d => $"{d.Target}: {d.Message}"));
+      message += $", Details=[{details}]";
+    }
+
+    if (error.InnerError != null)
+    {
+      message += $", InnerError={error.InnerError.Message}";
+    }
+
+    return message;
+  }
+
+  /// <summary>
+  /// Graph API呼び出し時の例外を処理し、適切なエラーメッセージを返す
+  /// </summary>
+  private Exception HandleGraphApiException(Exception ex, string operation)
+  {
+    if (ex is ODataError oDataError)
+    {
+      var errorMessage = GetODataErrorMessage(oDataError);
+      _logger.LogError(ex, $"{operation}中にODataErrorが発生しました: {errorMessage}");
+      return new Exception($"{operation}に失敗しました: {errorMessage}", ex);
+    }
+
+    _logger.LogError(ex, $"{operation}中に例外が発生しました");
+    return new Exception($"{operation}に失敗しました: {ex.Message}", ex);
   }
 
   /// <summary>
@@ -242,7 +286,7 @@ public class GraphApiClient : IDisposable
     }
     catch (Exception ex)
     {
-      throw new Exception($"サイトIDの取得に失敗しました: {ex.Message}", ex);
+      throw HandleGraphApiException(ex, "サイトIDの取得");
     }
 
     if (site?.Id == null)
@@ -269,7 +313,7 @@ public class GraphApiClient : IDisposable
     }
     catch (Exception ex)
     {
-      throw new Exception($"ドライブIDの取得に失敗しました: {ex.Message}", ex);
+      throw HandleGraphApiException(ex, "ドライブIDの取得");
     }
 
     if (drives?.Value == null)
