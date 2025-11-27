@@ -23,9 +23,6 @@ public class GraphApiClient : IDisposable
     
     // スコープを設定
     var scopes = new[] { 
-      "https://graph.microsoft.com/Files.ReadWrite.All",
-      "https://graph.microsoft.com/Sites.ReadWrite.All",
-      "https://graph.microsoft.com/User.Read",
       "https://graph.microsoft.com/.default"
     };
 
@@ -101,7 +98,7 @@ public class GraphApiClient : IDisposable
     );
 
     _logger.LogInformation("証明書認証とユーザー認証を組み合わせて認証を行います。");
-    _logger.LogInformation("初回のみブラウザでログインが必要です。次回以降はキャッシュされたトークンを使用します。");
+    _logger.LogInformation("初回以降はキャッシュされたトークンを使用します。");
 
     // GraphServiceClientの作成
     _graphClient = new GraphServiceClient(credential, scopes);
