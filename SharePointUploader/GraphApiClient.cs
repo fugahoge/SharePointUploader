@@ -499,7 +499,7 @@ public class GraphApiClient : IDisposable
       var tokenRequestContext = new TokenRequestContext(scopes);
       var token = await credential.GetTokenAsync(tokenRequestContext, CancellationToken.None);
 
-      if (token?.Token == null)
+      if (string.IsNullOrEmpty(token.Token))
       {
         _logger.LogWarning("トークンの取得に失敗しました");
         return;
