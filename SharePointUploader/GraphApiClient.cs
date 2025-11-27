@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 using Azure.Core;
 using Azure.Identity;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace SharePointUploader;
 
@@ -102,6 +104,16 @@ public class GraphApiClient : IDisposable
 
     // GraphServiceClientの作成
     _graphClient = new GraphServiceClient(credential, scopes);
+
+    // トークンの権限（スコープ）を表示
+    try
+    {
+      LogTokenScopesAsync(credential, scopes).GetAwaiter().GetResult();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogWarning(ex, "トークンの権限情報の表示中にエラーが発生しました（処理は続行します）");
+    }
   }
 
   /// <summary>
@@ -475,5 +487,91 @@ public class GraphApiClient : IDisposable
 
     _logger.LogError(ex, $"{operation}中に例外が発生しました");
     return new Exception($"{operation}に失敗しました: {ex.Message}", ex);
+  }
+
+  /// <summary>
+  /// トークンの権限（スコープ）をログに表示する
+  /// </summary>
+  private async Task LogTokenScopesAsync(TokenCredential credential, string[] scopes)
+  {
+    try
+    {
+      var tokenRequestContext = new TokenRequestContext(scopes);
+      var token = await credential.GetTokenAsync(tokenRequestContext, CancellationToken.None);
+
+      if (token?.Token == null)
+      {
+        _logger.LogWarning("トークンの取得に失敗しました");
+        return;
+      }
+
+      // JWTをデコード
+      var handler = new JwtSecurityTokenHandler();
+      if (!handler.CanReadToken(token.Token))
+      {
+        _logger.LogWarning("トークンのデコードに失敗しました");
+        return;
+      }
+
+      var jsonToken = handler.ReadJwtToken(token.Token);
+
+      _logger.LogInformation("=== トークンの権限情報 ===");
+
+      // スコープ（委任アクセスの場合）
+      var scpClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "scp");
+      if (scpClaim != null)
+      {
+        var scopesList = scpClaim.Value.Split(' ');
+        _logger.LogInformation($"委任アクセスのスコープ ({scopesList.Length}個):");
+        foreach (var scope in scopesList)
+        {
+          _logger.LogInformation($"  - {scope}");
+        }
+      }
+
+      // ロール（アプリケーションアクセスの場合）
+      var rolesClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "roles");
+      if (rolesClaim != null)
+      {
+        var rolesList = rolesClaim.Value.Split(' ');
+        _logger.LogInformation($"アプリケーションアクセスのロール ({rolesList.Length}個):");
+        foreach (var role in rolesList)
+        {
+          _logger.LogInformation($"  - {role}");
+        }
+      }
+
+      // その他の重要なクレーム
+      var appIdClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "appid");
+      if (appIdClaim != null)
+      {
+        _logger.LogInformation($"アプリケーションID: {appIdClaim.Value}");
+      }
+
+      var oidClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "oid");
+      if (oidClaim != null)
+      {
+        _logger.LogInformation($"オブジェクトID: {oidClaim.Value}");
+      }
+
+      var upnClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "upn");
+      if (upnClaim != null)
+      {
+        _logger.LogInformation($"ユーザープリンシパル名: {upnClaim.Value}");
+      }
+
+      var expClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "exp");
+      if (expClaim != null && long.TryParse(expClaim.Value, out var expUnixTime))
+      {
+        var expirationTime = DateTimeOffset.FromUnixTimeSeconds(expUnixTime).LocalDateTime;
+        _logger.LogInformation($"トークンの有効期限: {expirationTime:yyyy-MM-dd HH:mm:ss}");
+      }
+
+      _logger.LogInformation("========================");
+    }
+    catch (Exception ex)
+    {
+      _logger.LogWarning(ex, "トークンの権限情報の取得に失敗しました");
+    }
   }
 }
