@@ -451,9 +451,9 @@ public class GraphApiClient : IDisposable
   }
 
   /// <summary>
-  /// 内部エラーの詳細を再帰的に取得する
+  /// 内部エラーの詳細を取得する
   /// </summary>
-  private string GetInnerErrorDetails(MainError? innerError, int depth)
+  private string GetInnerErrorDetails(InnerError? innerError, int depth)
   {
     if (innerError == null)
     {
@@ -461,15 +461,7 @@ public class GraphApiClient : IDisposable
     }
 
     var indent = new string(' ', depth * 2);
-    var message = $"\n{indent}InnerError[{depth}]: Code={innerError.Code}, Message={innerError.Message}";
-
-    // 内部エラーの内部エラーも再帰的に取得（最大5階層まで）
-    if (innerError.InnerError != null && depth < 5)
-    {
-      message += GetInnerErrorDetails(innerError.InnerError, depth + 1);
-    }
-
-    return message;
+    return $"\n{indent}InnerError[{depth}]: {innerError}";
   }
 
   /// <summary>
