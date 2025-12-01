@@ -23,64 +23,28 @@ public class GraphApiClient : IDisposable
   {
     _logger = logger;
     
-    // スコープを設定
+    // 権限スコープ
     var scopes = new[] { 
-      "https://graph.microsoft.com/.default"
+      "Files.ReadWrite.All",
+      "Sites.ReadWrite.All",
+      "User.Read"
     };
 
-    // 証明書を読み込む
-    X509Certificate2 certificate;
-    try
-    {
-      if (!string.IsNullOrWhiteSpace(config.CertificatePath))
-      {
-        // 証明書を読み込む（ファイル）
-        _logger.LogInformation($"証明書を読み込みます: {config.CertificatePath}");
-        if (string.IsNullOrEmpty(config.CertificatePassword))
-        {
-          certificate = new X509Certificate2(config.CertificatePath);
-        }
-        else
-        {
-          certificate = new X509Certificate2(config.CertificatePath, config.CertificatePassword);
-        }
-      }
-      else
-      {
-        // 証明書を読み込む（Windowsキーストア）
-        _logger.LogInformation("証明書を読み込みます");
-        certificate = LoadCertificateFromStore(config.Thumbprint, config.StoreName, config.StoreLocation);
-      }
+    string AuthRecordFile = "AuthRecord.json";
+    AuthenticationRecord? authRecord = null;
 
-      // 秘密鍵が含まれていることを確認
-      if (!certificate.HasPrivateKey)
-      {
-        certificate.Dispose();
-        throw new InvalidOperationException(
-          $"証明書に秘密鍵が含まれていません。");
-      }
-    }
-    catch (Exception ex)
+    // 認証レコードを読み込む
+    if (File.Exists(AuthRecordFile))
     {
-      throw new Exception($"証明書の読み込みに失敗しました: {ex.Message}", ex);
+      using var stream = File.OpenRead(AuthRecordFile);
+      authRecord = AuthenticationRecord.Deserialize(stream);
     }
-
-    // 証明書認証（アプリケーション認証）
-    var certificateCredential = new ClientCertificateCredential(
-      config.TenantId,
-      config.ClientId,
-      certificate
-    );
 
     // ユーザー認証（Interactive Browser認証）
     // 初回のみブラウザでログインし、次回以降はキャッシュされたトークンを使用
     var interactiveCredential = new InteractiveBrowserCredential(
       new InteractiveBrowserCredentialOptions
       {
-        // 初回ログイン: ブラウザでログインし、アクセストークンとリフレッシュトークンを取得
-        // 2回目以降: キャッシュからリフレッシュトークンを読み込み、アクセストークンを自動更新
-        // リフレッシュトークンの有効期限経過後は再度ブラウザでログインが必要（通常は90日経過後）
-        
         TenantId = config.TenantId,
         ClientId = config.ClientId,
         RedirectUri = new Uri("http://localhost"),
@@ -89,74 +53,43 @@ public class GraphApiClient : IDisposable
         TokenCachePersistenceOptions = new TokenCachePersistenceOptions
         {
           Name = "SharePointUploaderTokenCache"
-        }
+        },
+        AuthenticationRecord = authRecord
       }
     );
 
-    // 証明書でアプリケーション認証を行い、ユーザーがログインしてそのユーザーの権限でアクセス
-    var credential = new ChainedTokenCredential(
-      certificateCredential,
-      interactiveCredential
-    );
+    // 認証レコードがない場合はユーザー認証を行い、認証レコードを保存
+    if(authRecord == null)
+    {
+      _logger.LogWarning("認証レコードがないため、ユーザー認証を行います。");
 
-    _logger.LogInformation("証明書認証とユーザー認証を組み合わせて認証を行います。");
-    _logger.LogInformation("初回以降はキャッシュされたトークンを使用します。");
+      var context = new TokenRequestContext(scopes);
+
+      authRecord = interactiveCredential
+        .AuthenticateAsync(context)
+        .GetAwaiter()
+        .GetResult();
+
+      using var stream = File.Create(AuthRecordFile);
+      authRecord.Serialize(stream);
+    }
+    else
+    {
+      _logger.LogInformation("認証レコードがあるため、ユーザー認証を行いません。");
+    }
 
     // GraphServiceClientの作成
-    _graphClient = new GraphServiceClient(credential, scopes);
+    _graphClient = new GraphServiceClient(interactiveCredential, scopes);
 
     // トークンの権限（スコープ）を表示
     try
     {
-      LogTokenScopesAsync(credential, scopes).GetAwaiter().GetResult();
+      LogTokenScopesAsync(interactiveCredential, scopes).GetAwaiter().GetResult();
     }
     catch (Exception ex)
     {
       _logger.LogWarning(ex, "トークンの権限情報の表示中にエラーが発生しました（処理は続行します）");
     }
-  }
-
-  /// <summary>
-  /// Windowsキーストアから証明書を読み込む
-  /// </summary>
-  private X509Certificate2 LoadCertificateFromStore(string thumbprint, string storeName, string storeLocation)
-  {
-    // StoreNameをパース
-    if (!Enum.TryParse<StoreName>(storeName, true, out var parsedStoreName))
-    {
-      throw new ArgumentException($"無効なStoreNameです: {storeName}");
-    }
-
-    // StoreLocationをパース
-    if (!Enum.TryParse<StoreLocation>(storeLocation, true, out var parsedStoreLocation))
-    {
-      throw new ArgumentException($"無効なStoreLocationです: {storeLocation}");
-    }
-
-    _logger.LogInformation($"キーストア: {parsedStoreName}, 場所: {parsedStoreLocation}, サムプリント: {thumbprint}");
-
-    // キーストアを開く
-    using var store = new X509Store(parsedStoreName, parsedStoreLocation);
-    store.Open(OpenFlags.ReadOnly);
-
-    // サムプリントで証明書を検索（大文字小文字を区別しない）
-    var certificates = store.Certificates.Find(
-      X509FindType.FindByThumbprint,
-      thumbprint,
-      false // validOnly: false にすることで、有効期限切れの証明書も検索可能
-    );
-
-    if (certificates.Count == 0)
-    {
-      throw new Exception(
-        $"指定されたサムプリント '{thumbprint}' の証明書がキーストア '{parsedStoreName}' ({parsedStoreLocation}) に見つかりませんでした");
-    }
-
-    // 最初の証明書を取得（通常は1つのはず）
-    var certificate = certificates[0];
-    
-    // 取得した証明書を返す
-    return new X509Certificate2(certificate);
   }
 
   /// <summary>
