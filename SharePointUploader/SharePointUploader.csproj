@@ -24,8 +24,6 @@
     <PublishReadyToRun>true</PublishReadyToRun>
 
     <!-- 最適化設定 -->
-    <Optimize>true</Optimize>
-    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
