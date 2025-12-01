@@ -30,13 +30,12 @@ public class GraphApiClient : IDisposable
       "User.Read"
     };
 
-    string AuthRecordFile = "AuthRecord.json";
     AuthenticationRecord? authRecord = null;
 
     // 認証レコードを読み込む
-    if (File.Exists(AuthRecordFile))
+    if (File.Exists(config.AuthRecordFile))
     {
-      using var stream = File.OpenRead(AuthRecordFile);
+      using var stream = File.OpenRead(config.AuthRecordFile);
       authRecord = AuthenticationRecord.Deserialize(stream);
     }
 
@@ -70,7 +69,7 @@ public class GraphApiClient : IDisposable
         .GetAwaiter()
         .GetResult();
 
-      using var stream = File.Create(AuthRecordFile);
+      using var stream = File.Create(config.AuthRecordFile);
       authRecord.Serialize(stream);
     }
     else

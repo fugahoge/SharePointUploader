@@ -5,9 +5,7 @@
     "FolderPath": "Shared Documents/UploadFolder",
     "TenantId": "your-tenant-id",
     "ClientId": "your-client-id",
-    "CertificatePath": "path/to/certificate.pfx",
-    "CertificatePassword": "certificate-password",
-    "Thumbprint": "",
+    "AuthRecordFile": "AuthRecordCache.json",
     "StoreName": "My",
     "StoreLocation": "CurrentUser"
   },

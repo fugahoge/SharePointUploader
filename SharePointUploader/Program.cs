@@ -140,38 +140,5 @@ class Program
     {
       throw new Exception("設定エラー: ClientIdが指定されていません");
     }
-
-    // 証明書の設定を検証
-    if (!string.IsNullOrWhiteSpace(config.CertificatePath))
-    {
-      // ファイルから読み込む場合
-      if (!File.Exists(config.CertificatePath))
-      {
-        throw new Exception($"設定エラー: 証明書ファイルが見つかりません: {config.CertificatePath}");
-      }
-      logger.LogInformation("証明書はファイルから読み込まれます");
-    }
-    else
-    {
-      // Windowsキーストアから読み込む場合
-      if (string.IsNullOrWhiteSpace(config.Thumbprint))
-      {
-        throw new Exception("設定エラー: Thumbprintが指定されていません");
-      }
-
-      if (string.IsNullOrWhiteSpace(config.StoreName))
-      {
-        throw new Exception("設定エラー: StoreNameが指定されていません");
-      }
-
-      if (string.IsNullOrWhiteSpace(config.StoreLocation))
-      {
-        throw new Exception("設定エラー: StoreLocationが指定されていません");
-      }
-
-      logger.LogInformation("証明書はWindowsキーストアから読み込まれます");
-    }
-
-    logger.LogInformation("設定の検証が完了しました");
   }
 }
