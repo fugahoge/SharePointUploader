@@ -16,10 +16,11 @@ namespace SharePointUploader;
 
 public class GraphApiClient : IDisposable
 {
-  private readonly GraphServiceClient _graphClient;
   private readonly ILogger _logger;
 
-  public GraphApiClient(SharePointConfig config, ILogger logger)
+  private readonly GraphServiceClient _graphClient;
+
+  public GraphApiClient(string tenantId, string clientId, string authRecordFile, ILogger logger)
   {
     _logger = logger;
     
@@ -32,10 +33,10 @@ public class GraphApiClient : IDisposable
 
     AuthenticationRecord? authRecord = null;
 
-    // 認証レコードを読み込む
-    if (File.Exists(config.AuthRecordFile))
+    // キャッシュされた認証情報を読み込む
+    if (File.Exists(authRecordFile))
     {
-      using var stream = File.OpenRead(config.AuthRecordFile);
+      using var stream = File.OpenRead(authRecordFile);
       authRecord = AuthenticationRecord.Deserialize(stream);
     }
 
@@ -44,8 +45,8 @@ public class GraphApiClient : IDisposable
     var interactiveCredential = new InteractiveBrowserCredential(
       new InteractiveBrowserCredentialOptions
       {
-        TenantId = config.TenantId,
-        ClientId = config.ClientId,
+        TenantId = tenantId,
+        ClientId = clientId,
         RedirectUri = new Uri("http://localhost"),
 
         // トークンキャッシュを有効化（Windows Credential Managerへ保存）
@@ -53,14 +54,16 @@ public class GraphApiClient : IDisposable
         {
           Name = "SharePointUploaderTokenCache"
         },
+
+        // キャッシュされた認証情報を使用
         AuthenticationRecord = authRecord
       }
     );
 
-    // 認証レコードがない場合はユーザー認証を行い、認証レコードを保存
+    // 認証情報がない場合はユーザー認証を行い、認証情報を保存
     if(authRecord == null)
     {
-      _logger.LogWarning("認証レコードがないため、ユーザー認証を行います。");
+      _logger.LogWarning("ユーザー認証を行います。");
 
       var context = new TokenRequestContext(scopes);
 
@@ -69,12 +72,8 @@ public class GraphApiClient : IDisposable
         .GetAwaiter()
         .GetResult();
 
-      using var stream = File.Create(config.AuthRecordFile);
+      using var stream = File.Create(authRecordFile);
       authRecord.Serialize(stream);
-    }
-    else
-    {
-      _logger.LogInformation("認証レコードがあるため、ユーザー認証を行いません。");
     }
 
     // GraphServiceClientの作成
@@ -105,7 +104,7 @@ public class GraphApiClient : IDisposable
     // ファイル名を取得
     var fileName = Path.GetFileName(localFilePath);
 
-    _logger.LogInformation($"ファイルをアップロード中: {fileName}");
+    _logger.LogInformation($"ファイルをアップロードします: {fileName}");
 
     // フォルダパスを正規化
     var targetFolderPath = string.IsNullOrEmpty(folderPath) ? string.Empty : folderPath.Trim('/');
@@ -162,7 +161,7 @@ public class GraphApiClient : IDisposable
 
     if (driveItem?.WebUrl == null)
     {
-      throw new Exception("ファイルのアップロードに失敗しました: WebUrlが取得できませんでした");
+      throw new Exception("ファイルのアップロードに失敗しました: アップロード結果が取得できませんでした");
     }
 
     _logger.LogInformation($"ファイルのアップロードが完了しました: {driveItem.WebUrl}");
@@ -182,8 +181,6 @@ public class GraphApiClient : IDisposable
     var sitePath = uri.AbsolutePath.TrimStart('/');
     var graphApiPath = $"{hostname}:/{sitePath}";
 
-    _logger.LogInformation($"リクエストURL: sites/{graphApiPath}");
-
     // Graph APIを使用してサイト情報を取得
     Site? site;
     try
@@ -192,20 +189,8 @@ public class GraphApiClient : IDisposable
         .Sites[graphApiPath]
         .GetAsync();
     }
-    catch (ODataError oDataError)
-    {
-      // ODataErrorの場合は詳細情報をログに記録
-      var errorMessage = GetODataErrorMessage(oDataError);
-      _logger.LogError(oDataError, $"サイトIDの取得中にODataErrorが発生しました:\n{errorMessage}");
-      
-      // スタックトレースも含めて詳細を記録
-      _logger.LogError($"スタックトレース:\n{oDataError.StackTrace}");
-      
-      throw new Exception($"サイトIDの取得に失敗しました: {errorMessage}", oDataError);
-    }
     catch (Exception ex)
     {
-      // その他の例外も詳細を記録
       _logger.LogError(ex, $"サイトIDの取得中に例外が発生しました: {ex.GetType().Name}");
       _logger.LogError($"例外メッセージ: {ex.Message}");
       _logger.LogError($"スタックトレース:\n{ex.StackTrace}");
@@ -362,7 +347,23 @@ public class GraphApiClient : IDisposable
   {
     _graphClient?.Dispose();
   }
-  
+
+  /// <summary>
+  /// Graph API呼び出し時の例外を処理し、適切なエラーメッセージを返す
+  /// </summary>
+  private Exception HandleGraphApiException(Exception ex, string operation)
+  {
+    if (ex is ODataError oDataError)
+    {
+      var errorMessage = GetODataErrorMessage(oDataError);
+      _logger.LogError(ex, $"{operation}中にODataErrorが発生しました: {errorMessage}");
+      return new Exception($"{operation}に失敗しました: {errorMessage}", ex);
+    }
+
+    _logger.LogError(ex, $"{operation}中に例外が発生しました");
+    return new Exception($"{operation}に失敗しました: {ex.Message}", ex);
+  }
+
   /// <summary>
   /// ODataError例外から詳細なエラーメッセージを取得する
   /// </summary>
@@ -404,23 +405,7 @@ public class GraphApiClient : IDisposable
     var indent = new string(' ', depth * 2);
     return $"\n{indent}InnerError[{depth}]: {innerError}";
   }
-
-  /// <summary>
-  /// Graph API呼び出し時の例外を処理し、適切なエラーメッセージを返す
-  /// </summary>
-  private Exception HandleGraphApiException(Exception ex, string operation)
-  {
-    if (ex is ODataError oDataError)
-    {
-      var errorMessage = GetODataErrorMessage(oDataError);
-      _logger.LogError(ex, $"{operation}中にODataErrorが発生しました: {errorMessage}");
-      return new Exception($"{operation}に失敗しました: {errorMessage}", ex);
-    }
-
-    _logger.LogError(ex, $"{operation}中に例外が発生しました");
-    return new Exception($"{operation}に失敗しました: {ex.Message}", ex);
-  }
-
+  
   /// <summary>
   /// トークンの権限（スコープ）をログに表示する
   /// </summary>
@@ -477,19 +462,19 @@ public class GraphApiClient : IDisposable
       var appIdClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "appid");
       if (appIdClaim != null)
       {
-        _logger.LogInformation($"アプリケーションID: {appIdClaim.Value}");
+//        _logger.LogInformation($"アプリケーションID: {appIdClaim.Value}");
       }
 
       var oidClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "oid");
       if (oidClaim != null)
       {
-        _logger.LogInformation($"オブジェクトID: {oidClaim.Value}");
+//        _logger.LogInformation($"オブジェクトID: {oidClaim.Value}");
       }
 
       var upnClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "upn");
       if (upnClaim != null)
       {
-        _logger.LogInformation($"ユーザープリンシパル名: {upnClaim.Value}");
+//        _logger.LogInformation($"ユーザープリンシパル名: {upnClaim.Value}");
       }
 
       var expClaim = jsonToken.Claims.FirstOrDefault(c => c.Type == "exp");

@@ -41,8 +41,6 @@ public class SharePointConfig
   public string TenantId { get; set; } = string.Empty;
   public string ClientId { get; set; } = string.Empty;
   public string AuthRecordFile { get; set; } = string.Empty;
-  public string StoreName { get; set; } = string.Empty;
-  public string StoreLocation { get; set; } = string.Empty;
 }
 
 public class LogConfig

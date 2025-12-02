@@ -38,14 +38,16 @@ class Program
 
       // Graph API クライアントの作成
       var client = new GraphApiClient(
-        config.SharePoint,
+        config.SharePoint.TenantId,
+        config.SharePoint.ClientId,
+        config.SharePoint.AuthRecordFile,
         logger
       );
 
-      logger.LogInformation($"アップロード開始: {fileName}");
-
       try
       {
+        logger.LogInformation($"アップロード開始: {fileName}");
+
         // ファイルをアップロード
         var webUrl = await client.UploadFileAsync(
           config.SharePoint.SiteUrl,
@@ -69,7 +71,6 @@ class Program
     }
     finally
     {
-      // Serilogのクリーンアップ
       Log.CloseAndFlush();
     }
   }
@@ -139,6 +140,16 @@ class Program
     if (string.IsNullOrWhiteSpace(config.ClientId))
     {
       throw new Exception("設定エラー: ClientIdが指定されていません");
+    }
+
+    if (string.IsNullOrWhiteSpace(config.FolderPath))
+    {
+      throw new Exception("設定エラー: FolderPathが指定されていません");
+    }
+
+    if (string.IsNullOrWhiteSpace(config.AuthRecordFile))
+    {
+      throw new Exception("設定エラー: AuthRecordFileが指定されていません");
     }
   }
 }

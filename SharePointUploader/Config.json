@@ -5,9 +5,7 @@
     "FolderPath": "Shared Documents/UploadFolder",
     "TenantId": "your-tenant-id",
     "ClientId": "your-client-id",
-    "AuthRecordFile": "AuthRecordCache.json",
-    "StoreName": "My",
-    "StoreLocation": "CurrentUser"
+    "AuthRecordFile": "AuthRecordCache.json"
   },
   "Log": {
     "Level": "Information",
