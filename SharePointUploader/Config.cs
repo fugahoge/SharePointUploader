@@ -40,7 +40,7 @@ public class SharePointConfig
   public string FolderPath { get; set; } = string.Empty;
   public string TenantId { get; set; } = string.Empty;
   public string ClientId { get; set; } = string.Empty;
-  public string AuthRecordFile { get; set; } = string.Empty;
+  public string AuthRecordFile { get; set; } = "AuthAccount.json";
 }
 
 public class LogConfig
