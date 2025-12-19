@@ -9,11 +9,14 @@ class Program
 {
   static async Task Main(string[] args)
   {
-    var config = Config.Load();
-    var logger = CreateLogger(config.Log);
+    Config config = null;
+    ILogger<Program> logger = null;
 
     try
     {
+      config = Config.Load();
+      logger = CreateLogger(config.Log);
+
       // 設定の検証
       ValidateConfig(config.SharePoint, logger);
 
@@ -66,7 +69,7 @@ class Program
     }
     catch (Exception ex)
     {
-      logger.LogError(ex, "エラーが発生しました");
+      logger?.LogError(ex, "エラーが発生しました");
       Environment.Exit(1);
     }
     finally
@@ -98,15 +101,14 @@ class Program
     };
 
     // Loggerの作成
-    var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-    var logFileName = $"SharePointUploader_{timestamp}.log";
+    var logFileName = "SharePointUploader.log";
     
     Log.Logger = new LoggerConfiguration()
       .MinimumLevel.Is(minimumLevel)
       .WriteTo.Console()
       .WriteTo.File(
         Path.Combine(logDirectory, logFileName),
-        rollingInterval: RollingInterval.Infinite,
+        rollingInterval: RollingInterval.Minute,
         retainedFileCountLimit: retainedFileCountLimit,
         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
       .CreateLogger();
