@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 
@@ -9,13 +10,20 @@ class Program
 {
   static async Task Main(string[] args)
   {
-    Config config = null;
-    ILogger<Program> logger = null;
+    Config? config = null;
+    ILogger<Program>? logger = null;
 
     try
     {
       config = Config.Load();
       logger = CreateLogger(config.Log);
+
+      // アセンブリメタデータからビルド日時を取得してログに出力
+      var buildDate = GetBuildDate();
+      if (!string.IsNullOrEmpty(buildDate))
+      {
+        logger.LogInformation($"ビルド日時: {buildDate}");
+      }
 
       // 設定の検証
       ValidateConfig(config.SharePoint, logger);
@@ -153,5 +161,34 @@ class Program
     {
       throw new Exception("設定エラー: AuthRecordFileが指定されていません");
     }
+  }
+
+  /// <summary>
+  /// アセンブリメタデータからビルド日時を取得
+  /// </summary>
+  private static string GetBuildDate()
+  {
+    string buildDate = "";
+    
+    try
+    {
+      var assembly = Assembly.GetExecutingAssembly();
+      var metadataAttributes = assembly.GetCustomAttributes(typeof(AssemblyMetadataAttribute));
+      
+      foreach (AssemblyMetadataAttribute attr in metadataAttributes)
+      {
+        if (attr.Key == "BuildDate")
+        {
+          buildDate = attr.Value ?? string.Empty;
+        }
+      }
+    }
+    catch
+    {
+      // エラーが発生した場合は空文字を返す
+      buildDate = "";
+    }
+    
+    return buildDate;
   }
 }

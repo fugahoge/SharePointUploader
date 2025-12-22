@@ -18,13 +18,22 @@
     <PublishDir>publish</PublishDir>
 
     <!-- デバッグシンボルの埋め込み -->
-    <DebugType>embedded</DebugType>
 
     <!-- ReadyToRun（容量削減） -->
-    <PublishReadyToRun>true</PublishReadyToRun>
 
     <!-- 最適化設定 -->
+    
+    <!-- ビルド日時の定義 -->
+    <BuildDate>$([System.DateTime]::Now.ToString("yyyy-MM-dd HH:mm:ss"))</BuildDate>
+    
+    <!-- アセンブリメタデータの生成を有効化 -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
+  
+  <!-- アセンブリメタデータにビルド日時を埋め込む（exeのプロパティに表示される） -->
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildDate" Value="$(BuildDate)" />
+  </ItemGroup>
 
   <ItemGroup>
     <Content Include="Config.json">
